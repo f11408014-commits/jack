@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>寶可夢隨機對戰挑戰 - 技能強化版</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&display=swap');
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background: linear-gradient(135deg, #2563eb 0%, #1e3a8a 100%); /* 藍色系主視覺 */
+        }
+        .pokemon-card {
+            border: 4px solid #facc15; /* 黃色邊框 */
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            transition: transform 0.2s;
+            background-color: #f3f4f6;
+        }
+        .hp-bar {
+            transition: width 0.5s ease-in-out, background-color 0.5s;
+        }
+        .log-entry {
+            padding: 4px 8px;
+            margin-bottom: 4px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+        /* 戰鬥記錄顏色 */
+        .log-player { background-color: rgba(167, 243, 208, 0.9); } /* 玩家行動 (淺綠) */
+        .log-opponent { background-color: rgba(254, 202, 202, 0.9); } /* 對手行動 (淺紅) */
+        .log-info { background-color: rgba(199, 210, 254, 0.9); } /* 資訊 (淺藍) */
+
+        .move-button {
+            font-weight: 800;
+            padding: 12px 16px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            transition: all 0.15s;
+        }
+        .move-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.3);
+        }
+        .move-button:disabled {
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <!-- 主要遊戲介面 -->
+    <div id="game-container" class="w-full max-w-3xl bg-white p-6 rounded-3xl shadow-2xl border-8 border-yellow-400">
+        <h1 class="text-3xl font-black text-center text-blue-800 mb-6 tracking-wider">寶可夢隨機對戰！技能大升級！</h1>
+
+        <!-- 戰鬥區域 -->
+        <div class="space-y-8">
+            <!-- 對手寶可夢 -->
+            <div class="pokemon-card p-4 rounded-xl shadow-lg flex items-start space-x-4">
+                <span id="opponent-icon" class="text-5xl">?</span>
+                <div class="flex-grow">
+                    <div id="opponent-name" class="text-xl font-bold text-gray-700">對手寶可夢</div>
+                    <!-- 對手 HP 條 -->
+                    <div class="mt-1 w-full h-3 bg-gray-300 rounded-full overflow-hidden">
+                        <div id="opponent-hp-bar" class="hp-bar h-full bg-red-500" style="width: 100%;"></div>
+                    </div>
+                    <div id="opponent-hp-text" class="text-sm font-mono text-gray-700 mt-1">HP: 0/0</div>
+                </div>
+            </div>
+
+            <!-- 玩家寶可夢 -->
+            <div class="pokemon-card p-4 rounded-xl shadow-lg flex items-end justify-end space-x-4">
+                <div class="flex-grow text-right">
+                    <div id="player-name" class="text-xl font-bold text-gray-700">您的寶可夢</div>
+                    <!-- 玩家 HP 條 -->
+                    <div class="mt-1 w-full h-3 bg-gray-300 rounded-full overflow-hidden">
+                        <div id="player-hp-bar" class="hp-bar h-full bg-green-500" style="width: 100%;"></div>
+                    </div>
+                    <div id="player-hp-text" class="text-sm font-mono text-gray-700 mt-1">HP: 0/0</div>
+                </div>
+                <span id="player-icon" class="text-5xl">?</span>
+            </div>
+        </div>
+
+        <!-- 戰鬥紀錄 -->
+        <div class="mt-6 bg-gray-800 p-4 rounded-xl h-40 overflow-y-auto border border-gray-700">
+            <h2 class="text-lg font-semibold text-yellow-300 mb-2 border-b border-gray-700">戰鬥紀錄</h2>
+            <div id="battle-log" class="text-sm text-gray-300"></div>
+        </div>
+
+        <!-- 招式按鈕區 (2x2) -->
+        <div id="move-buttons" class="mt-6 grid grid-cols-2 gap-4">
+            <!-- 4 個招式按鈕將由 JavaScript 渲染 -->
+        </div>
+
+    </div>
+
+    <!-- 遊戲結果 Modal -->
+    <div id="result-modal" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-10 rounded-xl shadow-2xl text-center border-4 border-yellow-500 w-full max-w-md">
+            <h2 id="result-title" class="text-4xl font-extrabold mb-4"></h2>
+            <p id="result-message" class="text-xl text-gray-800 mb-6"></p>
+            
+            <!-- 折扣碼區塊 (僅勝利時顯示) -->
+            <div id="discount-code-area" class="hidden mb-6 p-4 bg-yellow-100 rounded-lg border border-green-500">
+                <p class="text-sm text-gray-700 mb-2">恭喜！這是您獲得的勝利獎勵：</p>
+                <code id="discount-code" class="text-2xl font-mono text-red-600 select-all p-3 bg-white rounded block border-dashed border-2 border-red-300"></code>
+            </div>
+
+            <button onclick="window.location.reload()" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-6 rounded-lg shadow-lg transition duration-150 ease-in-out">
+                重新挑戰
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- 寶可夢定義池 (每個寶可夢有 4 個招式) ---
+        const pokemonPool = [
+            { 
+                name: '火焰蜥蜴', maxHP: 100, element: 'fire', icon: '🔥🦎', 
+                moves: [
+                    { name: '火花', damage: 10, element: 'fire' },
+                    { name: '烈焰衝撞', damage: 15, element: 'fire' },
+                    { name: '噴射火焰', damage: 18, element: 'fire' },
+                    { name: '火之誓約', damage: 25, element: 'fire' },
+                ],
+                color: 'bg-red-500 hover:bg-red-600'
+            },
+            { 
+                name: '寒冰巨龍', maxHP: 120, element: 'ice', icon: '🐲❄️', 
+                moves: [
+                    { name: '冰錐', damage: 12, element: 'ice' },
+                    { name: '雪崩', damage: 16, element: 'ice' },
+                    { name: '急凍光線', damage: 20, element: 'ice' },
+                    { name: '暴風雪', damage: 24, element: 'ice' },
+                ],
+                color: 'bg-blue-500 hover:bg-blue-600'
+            },
+            { 
+                name: '大地守衛', maxHP: 110, element: 'ground', icon: '🗿🌳', 
+                moves: [
+                    { name: '飛沙走石', damage: 13, element: 'ground' },
+                    { name: '岩石爆擊', damage: 17, element: 'ground' },
+                    { name: '地震', damage: 22, element: 'ground' },
+                    { name: '大地之力', damage: 26, element: 'ground' },
+                ],
+                color: 'bg-yellow-600 hover:bg-yellow-700'
+            },
+            { 
+                name: '疾風鳥人', maxHP: 90, element: 'flying', icon: '💨🦅', 
+                moves: [
+                    { name: '疾風', damage: 11, element: 'flying' },
+                    { name: '空氣斬', damage: 14, element: 'flying' },
+                    { name: '暴風', damage: 19, element: 'flying' },
+                    { name: '神鳥猛擊', damage: 23, element: 'flying' },
+                ],
+                color: 'bg-cyan-500 hover:bg-cyan-600'
+            },
+            { 
+                name: '神秘水母', maxHP: 105, element: 'water', icon: '💧🐙', 
+                moves: [
+                    { name: '水槍', damage: 10, element: 'water' },
+                    { name: '水流噴射', damage: 14, element: 'water' },
+                    { name: '衝浪', damage: 17, element: 'water' },
+                    { name: '激流', damage: 25, element: 'water' },
+                ],
+                color: 'bg-indigo-500 hover:bg-indigo-600'
+            },
+            { 
+                name: '雷電獸', maxHP: 95, element: 'electric', icon: '⚡️🦁', 
+                moves: [
+                    { name: '電擊', damage: 14, element: 'electric' },
+                    { name: '閃電', damage: 16, element: 'electric' },
+                    { name: '十萬伏特', damage: 21, element: 'electric' },
+                    { name: '伏特攻擊', damage: 27, element: 'electric' },
+                ],
+                color: 'bg-amber-500 hover:bg-amber-600'
+            },
+        ];
+
+        // --- 屬性相剋表 (Super Effective: x1.5, Not Effective: x0.5) ---
+        const typeMatchups = {
+            fire: { superEffective: ['ice', 'ground'], notEffective: ['water'] },
+            ice: { superEffective: ['flying'], notEffective: ['fire'] },
+            ground: { superEffective: ['electric', 'fire'], notEffective: ['flying', 'water'] },
+            flying: { superEffective: ['ground'], notEffective: ['ice', 'electric'] },
+            water: { superEffective: ['fire', 'ground'], notEffective: ['electric'] },
+            electric: { superEffective: ['water', 'flying'], notEffective: ['ground'] },
+        };
+
+        // --- 遊戲狀態變數 ---
+        let player = {};
+        let opponent = {};
+        let isPlayerTurn = true;
+        let isGameOver = false;
+
+        // --- DOM 元素快取 ---
+        const $playerHPText = document.getElementById('player-hp-text');
+        const $playerHPBar = document.getElementById('player-hp-bar');
+        const $opponentHPText = document.getElementById('opponent-hp-text');
+        const $opponentHPBar = document.getElementById('opponent-hp-bar');
+        const $battleLog = document.getElementById('battle-log');
+        const $moveButtons = document.getElementById('move-buttons');
+        const $resultModal = document.getElementById('result-modal');
+        const $resultTitle = document.getElementById('result-title');
+        const $resultMessage = document.getElementById('result-message');
+        const $discountCodeArea = document.getElementById('discount-code-area');
+        const $playerName = document.getElementById('player-name');
+        const $playerIcon = document.getElementById('player-icon');
+        const $opponentName = document.getElementById('opponent-name');
+        const $opponentIcon = document.getElementById('opponent-icon');
+        const $discountCode = document.getElementById('discount-code');
+
+
+        /** 紀錄戰鬥訊息 */
+        function logMessage(message, type) {
+            const entry = document.createElement('div');
+            // 根據類型添加不同的樣式
+            entry.className = `log-entry text-gray-900 ${type === 'player' ? 'log-player' : type === 'opponent' ? 'log-opponent' : 'log-info'} text-sm`;
+            entry.innerHTML = message;
+            $battleLog.prepend(entry); // 將最新訊息放在最上面
+        }
+
+        /** 更新 HP 顯示 */
+        function updateHealthDisplay() {
+            // 計算百分比
+            const playerPercent = (player.currentHP / player.maxHP) * 100;
+            const opponentPercent = (opponent.currentHP / opponent.maxHP) * 100;
+
+            // 更新玩家 HP
+            $playerHPText.textContent = `HP: ${Math.max(0, player.currentHP)}/${player.maxHP}`;
+            $playerHPBar.style.width = `${Math.max(0, playerPercent)}%`;
+            // 根據 HP 百分比改變顏色 (綠->黃->紅)
+            $playerHPBar.style.backgroundColor = playerPercent > 50 ? '#10b981' : playerPercent > 20 ? '#facc15' : '#ef4444';
+
+            // 更新對手 HP
+            $opponentHPText.textContent = `HP: ${Math.max(0, opponent.currentHP)}/${opponent.maxHP}`;
+            $opponentHPBar.style.width = `${Math.max(0, opponentPercent)}%`;
+            $opponentHPBar.style.backgroundColor = opponentPercent > 50 ? '#10b981' : opponentPercent > 20 ? '#facc15' : '#ef4444';
+        }
+
+        /** 計算傷害 (使用屬性相剋表) */
+        function calculateDamage(attacker, defender, move) {
+            let baseDamage = move.damage;
+            let multiplier = 1.0;
+            let effectivenessMessage = "";
+
+            const matchups = typeMatchups[move.element];
+
+            if (matchups) {
+                if (matchups.superEffective.includes(defender.element)) {
+                    multiplier = 1.5;
+                    effectivenessMessage = `<span class="text-red-600 font-bold">屬性有利！效果絕佳！</span>`;
+                } else if (matchups.notEffective.includes(defender.element)) {
+                    multiplier = 0.5;
+                    effectivenessMessage = `<span class="text-blue-600 font-bold">屬性不利... 效果不好。</span>`;
+                }
+            }
+            
+            // 少量隨機性 (90% 到 110%)，增加戰鬥不確定性
+            const randomFactor = 0.9 + Math.random() * 0.2; 
+            
+            let finalDamage = Math.floor(baseDamage * multiplier * randomFactor);
+            
+            if (effectivenessMessage) {
+                 logMessage(effectivenessMessage, 'info');
+            }
+
+            return Math.max(1, finalDamage); // 確保傷害至少為 1
+        }
+
+        /** 玩家回合處理 */
+        window.handlePlayerMove = function(moveIndex) {
+            if (isGameOver || !isPlayerTurn) return;
+
+            const move = player.moves[moveIndex];
+            logMessage(`${player.icon} ${player.name} 對 ${opponent.name} 使用了 [${move.name}]！`, 'player');
+
+            // 1. 計算並造成傷害
+            const damage = calculateDamage(player, opponent, move);
+            opponent.currentHP -= damage;
+            logMessage(`${opponent.icon} ${opponent.name} 受到 <span style="color:#ef4444; font-weight:bold;">${damage}</span> 點傷害。`, 'player');
+
+            // 2. 更新 UI
+            updateHealthDisplay();
+            disableMoves(true); // 禁用按鈕直到對手行動結束
+
+            // 3. 檢查勝利條件
+            if (checkWinCondition()) return;
+
+            // 4. 轉換為對手回合
+            isPlayerTurn = false;
+            setTimeout(opponentTurn, 2000); // 延遲 2 秒執行對手回合
+        }
+
+        /** 對手回合處理 */
+        function opponentTurn() {
+            if (isGameOver) return;
+
+            // 1. 對手隨機選擇招式
+            const moveIndex = Math.floor(Math.random() * opponent.moves.length);
+            const move = opponent.moves[moveIndex];
+            logMessage(`${opponent.icon} ${opponent.name} 對您使用了 [${move.name}]！`, 'opponent');
+
+            // 2. 計算並造成傷害
+            const damage = calculateDamage(opponent, player, move);
+            player.currentHP -= damage;
+            logMessage(`${player.icon} ${player.name} 受到 <span style="color:#ef4444; font-weight:bold;">${damage}</span> 點傷害。`, 'opponent');
+
+            // 3. 更新 UI
+            updateHealthDisplay();
+
+            // 4. 檢查失敗條件
+            if (checkWinCondition()) return;
+
+            // 5. 轉換回玩家回合
+            isPlayerTurn = true;
+            disableMoves(false); // 啟用按鈕
+            logMessage("現在是您的回合！請選擇招式。", 'info');
+        }
+
+        /** 檢查勝利或失敗條件 */
+        function checkWinCondition() {
+            if (isGameOver) return true;
+
+            if (opponent.currentHP <= 0) {
+                isGameOver = true;
+                showResult(true);
+                return true;
+            } else if (player.currentHP <= 0) {
+                isGameOver = true;
+                showResult(false);
+                return true;
+            }
+            return false;
+        }
+
+        /** 禁用/啟用招式按鈕 */
+        function disableMoves(disabled) {
+            document.querySelectorAll('#move-buttons button').forEach(btn => {
+                btn.disabled = disabled;
+                btn.classList.toggle('opacity-50', disabled);
+                btn.classList.toggle('cursor-not-allowed', disabled);
+            });
+        }
+
+        /** 顯示結果 Modal */
+        function showResult(isWin) {
+            $resultModal.classList.remove('hidden');
+            disableMoves(true); 
+
+            if (isWin) {
+                $resultTitle.textContent = "戰鬥勝利！獲得獎勵！";
+                $resultTitle.classList.remove('text-red-600');
+                $resultTitle.classList.add('text-green-600');
+                $resultMessage.textContent = `恭喜您成功擊敗對手 ${opponent.name}！您是真正的寶可夢大師！`;
+                $discountCodeArea.classList.remove('hidden');
+                // 動態生成折扣碼 (5 位隨機數字)
+                $discountCode.textContent = `WINNER-${Math.floor(Math.random() * 90000) + 10000}`;
+            } else {
+                $resultTitle.textContent = "戰鬥失敗...";
+                $resultTitle.classList.remove('text-green-600');
+                $resultTitle.classList.add('text-red-600');
+                $resultMessage.textContent = `您的 ${player.name} 已失去戰鬥能力，請再加油！下次一定能成功！`;
+                $discountCodeArea.classList.add('hidden');
+            }
+            logMessage(isWin ? "遊戲結束：勝利，折扣碼已顯示。" : "遊戲結束：失敗，鼓勵訊息已顯示。", 'info');
+        }
+
+        /** 渲染招式按鈕 */
+        function renderMoveButtons() {
+            // 招式按鈕佈局為 2x2
+            $moveButtons.innerHTML = player.moves.map((move, index) => `
+                <button 
+                    onclick="handlePlayerMove(${index})" 
+                    class="move-button text-white ${player.color} text-lg"
+                >
+                    ${move.name} 
+                    <span class="block text-sm font-normal"> (威力: ${move.damage} / 屬性: ${move.element})</span>
+                </button>
+            `).join('');
+        }
+
+        /** 隨機抽取寶可夢並初始化狀態 */
+        function initializePokemon() {
+            // 隨機抽取玩家寶可夢
+            const playerIndex = Math.floor(Math.random() * pokemonPool.length);
+            const playerTemplate = pokemonPool[playerIndex];
+            player = { ...playerTemplate, currentHP: playerTemplate.maxHP };
+
+            // 隨機抽取對手寶可夢 (確保不與玩家相同)
+            let opponentIndex;
+            do {
+                opponentIndex = Math.floor(Math.random() * pokemonPool.length);
+            } while (opponentIndex === playerIndex);
+            
+            const opponentTemplate = pokemonPool[opponentIndex];
+            opponent = { ...opponentTemplate, currentHP: opponentTemplate.maxHP };
+        }
+
+        /** 遊戲初始化 */
+        function startGame() {
+            initializePokemon(); // 隨機選擇寶可夢
+
+            // 更新介面上的寶可夢資訊
+            $playerName.textContent = `${player.name} (${player.element})`;
+            $playerIcon.textContent = player.icon;
+            $opponentName.textContent = `${opponent.name} (${opponent.element})`;
+            $opponentIcon.textContent = opponent.icon;
+            
+            logMessage(`對手 ${opponent.icon} ${opponent.name} (${opponent.element}系) 出現了！`, 'info');
+            logMessage(`您的 ${player.icon} ${player.name} (${player.element}系) 參戰！戰鬥開始。`, 'info');
+            logMessage("屬性相剋提示：火剋冰/地；冰剋飛；地剋電/火；飛剋地；水剋火/地；電剋水/飛。", 'info');
+            
+            renderMoveButtons();
+            updateHealthDisplay();
+        }
+
+        // 頁面載入完成後啟動遊戲
+        window.onload = startGame;
+
+    </script>
+</body>
+</html>
